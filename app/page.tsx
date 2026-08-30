@@ -116,7 +116,7 @@ export default function Home() {
   const diffDaysPnd90 = Math.ceil(diffTimePnd90 / (1000 * 60 * 60 * 24));
 
   return (
-    <div className="space-y-6 pb-20 max-w-7xl mx-auto font-sans relative bg-slate-50/50 p-4 sm:p-6 rounded-3xl">
+    <div className="space-y-6 pb-20 max-w-7xl mx-auto font-sans relative bg-slate-50 min-h-screen px-4 sm:px-6 lg:px-8 overflow-x-hidden">
       
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-amber-100 shadow-sm">
