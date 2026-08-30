@@ -1,0 +1,603 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { 
+  Bell, HelpCircle, Calendar, Plus, Upload, ArrowUpRight, ArrowDownLeft, 
+  AlertCircle, ChevronRight, X, Camera, FileOutput, Calculator, ChevronDown, TrendingUp, BarChart3, AlertTriangle, Clock
+} from 'lucide-react';
+
+export default function Home() {
+  const [incomeData, setIncomeData] = useState<any[]>([]);
+  const [expenseData, setExpenseData] = useState<any[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [showAlertModal, setShowAlertModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    const savedIncome = JSON.parse(localStorage.getItem('incomeTransactions') || '[]');
+    const savedExpense = JSON.parse(localStorage.getItem('expenseTransactions') || '[]');
+    setIncomeData(savedIncome);
+    setExpenseData(savedExpense);
+  }, []);
+
+  const allDates = [...incomeData.map(i => i.date), ...expenseData.map(e => e.date)].filter(Boolean);
+  const availableMonths = Array.from(
+    new Set(
+      allDates.map(d => {
+        const str = String(d);
+        if (str.includes('-')) return str.slice(0, 7);
+        return '';
+      }).filter(Boolean)
+    )
+  ).sort().reverse() as string[];
+
+  const filteredIncome = incomeData.filter(item => {
+    if (selectedMonth === 'all') return true;
+    if (!item || !item.date) return false;
+    return String(item.date).startsWith(selectedMonth);
+  });
+
+  const filteredExpense = expenseData.filter(item => {
+    if (selectedMonth === 'all') return true;
+    if (!item || !item.date) return false;
+    return String(item.date).startsWith(selectedMonth);
+  });
+
+  const totalSales = filteredIncome.reduce((sum, item) => sum + (Number(item?.grossSales || item?.total || 0)), 0);
+  const totalExpenses = filteredExpense.reduce((sum, item) => sum + (Number(item?.amount || 0)), 0);
+  const netProfit = totalSales - totalExpenses;
+
+  const calculatePersonalIncomeTax = (income: number) => {
+    const expenseDeduction = income * 0.60;
+    const incomeAfterExpense = income - expenseDeduction;
+    const personalDeduction = 60000;
+    let netTaxableIncome = Math.max(0, incomeAfterExpense - personalDeduction);
+
+    let tax = 0;
+    if (netTaxableIncome > 5000000) {
+      tax += (netTaxableIncome - 5000000) * 0.35;
+      netTaxableIncome = 5000000;
+    }
+    if (netTaxableIncome > 2000000) {
+      tax += (netTaxableIncome - 2000000) * 0.30;
+      netTaxableIncome = 2000000;
+    }
+    if (netTaxableIncome > 1000000) {
+      tax += (netTaxableIncome - 1000000) * 0.25;
+      netTaxableIncome = 1000000;
+    }
+    if (netTaxableIncome > 750000) {
+      tax += (netTaxableIncome - 750000) * 0.20;
+      netTaxableIncome = 750000;
+    }
+    if (netTaxableIncome > 500000) {
+      tax += (netTaxableIncome - 500000) * 0.15;
+      netTaxableIncome = 500000;
+    }
+    if (netTaxableIncome > 300000) {
+      tax += (netTaxableIncome - 300000) * 0.10;
+      netTaxableIncome = 300000;
+    }
+    if (netTaxableIncome > 150000) {
+      tax += (netTaxableIncome - 150000) * 0.05;
+    }
+    return Math.floor(tax);
+  };
+
+  const estimatedTax = calculatePersonalIncomeTax(totalSales);
+
+  const chartMonths = availableMonths.length > 0 ? availableMonths.slice(0, 6).reverse() : ['ยอดปัจจุบัน'];
+  const chartData = chartMonths.map(month => {
+    const mIncome = incomeData.filter(i => i.date && String(i.date).startsWith(month === 'ยอดปัจจุบัน' ? '' : month))
+      .reduce((sum, i) => sum + (Number(i.grossSales || i.total || 0)), 0);
+    const mExpense = expenseData.filter(e => e.date && String(e.date).startsWith(month === 'ยอดปัจจุบัน' ? '' : month))
+      .reduce((sum, e) => sum + (Number(e.amount || 0)), 0);
+    return {
+      month: month === 'ยอดปัจจุบัน' ? 'ภาพรวม' : month,
+      income: mIncome,
+      expense: mExpense
+    };
+  });
+
+  const maxChartValue = Math.max(...chartData.map(d => Math.max(d.income, d.expense)), 1000);
+
+  const recentTransactions = [
+    ...filteredIncome.map(item => ({ ...item, type: 'income' })),
+    ...filteredExpense.map(item => ({ ...item, type: 'expense' }))
+  ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()).slice(0, 5);
+
+  const targetPnd94 = new Date('2026-09-30');
+  const today = new Date();
+  const diffTimePnd94 = targetPnd94.getTime() - today.getTime();
+  const diffDaysPnd94 = Math.ceil(diffTimePnd94 / (1000 * 60 * 60 * 24));
+
+  const targetPnd90 = new Date('2027-03-31');
+  const diffTimePnd90 = targetPnd90.getTime() - today.getTime();
+  const diffDaysPnd90 = Math.ceil(diffTimePnd90 / (1000 * 60 * 60 * 24));
+
+  return (
+    <div className="space-y-6 pb-20 max-w-7xl mx-auto font-sans relative bg-slate-50/50 p-4 sm:p-6 rounded-3xl">
+      
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-amber-100 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="relative w-12 h-12 rounded-2xl overflow-hidden border border-amber-200/60 shadow-sm flex-shrink-0 bg-amber-50 flex items-center justify-center text-xl">
+            🐕
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-slate-800 tracking-tight">สวัสดีครับ, เจ้าของร้าน ข้าวพันผัก 👋</h1>
+              <span className="text-[10px] bg-amber-100/80 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200/50">
+                PRO PLAN
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">ร้านข้าวพันผัก • ภาพรวมการเงินและภาษีประจำวัน</p>
+          </div>
+        </div>
+
+        {/* Top Right Controls & Month Selector */}
+        <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          <button 
+            onClick={() => setShowAlertModal(true)}
+            className="relative p-2 rounded-2xl bg-amber-50/80 hover:bg-amber-100 text-amber-800 border border-amber-200/60 transition flex items-center gap-1.5 px-3 text-xs font-bold shadow-sm"
+          >
+            <Bell className="w-4 h-4 text-amber-500 animate-bounce" />
+            <span>แจ้งเตือนภาษี</span>
+            <span className="w-4 h-4 bg-rose-400 text-white text-[9px] font-bold rounded-full flex items-center justify-center ml-1">2</span>
+          </button>
+          
+          <div className="flex items-center gap-2 bg-amber-50/40 px-3 py-2 rounded-2xl border border-amber-100 text-xs text-slate-700 font-bold">
+            <Calendar className="w-3.5 h-3.5 text-amber-500" />
+            <select 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent focus:outline-none cursor-pointer text-slate-600"
+            >
+              <option value="all">ทุกเดือนทั้งหมด</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>เดือน {m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* 🚨 TAX URGENT ALERT BANNER */}
+      <div className="bg-gradient-to-r from-amber-100 via-orange-100 to-rose-100 p-4 rounded-3xl text-slate-800 shadow-sm border border-amber-200/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-white/80 backdrop-blur-md flex items-center justify-center text-xl shrink-0 shadow-sm">
+            ⏳
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-black text-xs sm:text-sm tracking-tight text-amber-950">แจ้งเตือนกำหนดกำหนดยื่นภาษีบุคคลธรรมดา</h3>
+              <span className="bg-amber-200/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full">สำคัญมาก</span>
+            </div>
+            <p className="text-xs text-amber-900/80 font-medium mt-0.5">
+              เหลือเวลาอีก <strong className="text-rose-600 underline">{diffDaysPnd94 > 0 ? diffDaysPnd94 : 0} วัน</strong> ก่อนครบกำหนดยื่น ภ.ง.ด.94 (ครึ่งปี) ภายใน 30 กันยายนนี้!
+            </p>
+          </div>
+        </div>
+        <button 
+          onClick={() => setShowAlertModal(true)}
+          className="bg-white hover:bg-amber-50 text-amber-900 font-black text-xs px-4 py-2.5 rounded-2xl shadow-sm border border-amber-200/60 transition shrink-0"
+        >
+          ตรวจสอบรายการภาษีทั้งหมด →
+        </button>
+      </div>
+
+      {/* KPI 4 Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* รายรับ */}
+        <div className="bg-white rounded-3xl border border-emerald-100 p-4 shadow-sm hover:shadow-md transition relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-400"></div>
+          <div className="flex justify-between items-start pt-1">
+            <div>
+              <span className="text-xs font-bold text-slate-400">รายรับเดือนนี้</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-black text-slate-700 tracking-tight">{totalSales.toLocaleString()}</span>
+                <span className="text-xs font-bold text-slate-400">บาท</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+              <ArrowDownLeft className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">จาก {filteredIncome.length} รายการ</span>
+            <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">ข้อมูลจริง</span>
+          </div>
+        </div>
+
+        {/* ค่าใช้จ่าย */}
+        <div className="bg-white rounded-3xl border border-rose-100 p-4 shadow-sm hover:shadow-md transition relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-rose-400"></div>
+          <div className="flex justify-between items-start pt-1">
+            <div>
+              <span className="text-xs font-bold text-slate-400">ค่าใช้จ่ายเดือนนี้</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-black text-slate-700 tracking-tight">{totalExpenses.toLocaleString()}</span>
+                <span className="text-xs font-bold text-slate-400">บาท</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-2xl bg-rose-50 text-rose-400 flex items-center justify-center">
+              <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">จาก {filteredExpense.length} รายการ</span>
+            <span className="font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">ข้อมูลจริง</span>
+          </div>
+        </div>
+
+        {/* กำไรสุทธิ */}
+        <div className="bg-white rounded-3xl border border-indigo-100 p-4 shadow-sm hover:shadow-md transition relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-400"></div>
+          <div className="flex justify-between items-start pt-1">
+            <div>
+              <span className="text-xs font-bold text-slate-400">กำไรสุทธิ</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-black text-slate-700 tracking-tight">{netProfit.toLocaleString()}</span>
+                <span className="text-xs font-bold text-slate-400">บาท</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-2xl bg-indigo-50 text-indigo-400 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">รายรับ - รายจ่าย</span>
+            <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">คำนวณอัตโนมัติ</span>
+          </div>
+        </div>
+
+        {/* ภาษีที่ควรเตรียม */}
+        <div className="bg-gradient-to-br from-amber-50/60 to-orange-50/30 rounded-3xl border border-amber-200/60 p-4 shadow-sm hover:shadow-md transition relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-amber-400"></div>
+          <div className="flex justify-between items-start pt-1">
+            <div>
+              <span className="text-xs font-bold text-amber-800">ภาษีที่ควรเตรียม</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-black text-amber-950 tracking-tight">{estimatedTax.toLocaleString()}</span>
+                <span className="text-xs font-bold text-amber-800/60">บาท</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-2xl bg-amber-100/80 text-amber-800 flex items-center justify-center">
+              <Calculator className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-amber-100 flex items-center justify-between text-[11px]">
+            <span className="text-amber-800/70">เกณฑ์สรรพากร (เหมา 60%)</span>
+            <Link href="/reports" className="font-bold text-amber-800 hover:underline">ดูรายละเอียด →</Link>
+          </div>
+        </div>
+      </div>
+
+      {/* 🚀 QUICK ACTIONS SECTION */}
+      <div>
+        <div className="flex items-center gap-2 mb-2.5 px-1">
+          <span className="text-sm">✨</span>
+          <h2 className="text-xs font-black text-slate-500 tracking-wider uppercase">เมนูจัดการข้อมูลด่วน (Quick Actions)</h2>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <Link 
+            href="/income"
+            className="bg-gradient-to-br from-emerald-400 to-teal-500 text-white p-4 rounded-3xl border border-emerald-300/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition duration-200 flex items-center gap-3 text-left group relative overflow-hidden block"
+          >
+            <div className="absolute -right-2 -bottom-2 text-4xl opacity-10 font-black">💰</div>
+            <div className="w-10 h-10 rounded-2xl bg-white/25 backdrop-blur-md flex items-center justify-center font-black shrink-0 group-hover:scale-110 transition">
+              <Plus className="w-6 h-6 stroke-[3]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-black tracking-tight">เงินเข้า</p>
+                <span className="text-xs">💰</span>
+              </div>
+              <p className="text-[10px] text-emerald-50 font-medium">บันทึกรายรับ</p>
+            </div>
+          </Link>
+
+          <Link 
+            href="/expense"
+            className="bg-gradient-to-br from-rose-400 to-red-400 text-white p-4 rounded-3xl border border-rose-300/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition duration-200 flex items-center gap-3 text-left group relative overflow-hidden block"
+          >
+            <div className="absolute -right-2 -bottom-2 text-4xl opacity-10 font-black">💸</div>
+            <div className="w-10 h-10 rounded-2xl bg-white/25 backdrop-blur-md flex items-center justify-center font-black shrink-0 group-hover:scale-110 transition">
+              <ArrowUpRight className="w-6 h-6 stroke-[3]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-black tracking-tight">เงินออก</p>
+                <span className="text-xs">💸</span>
+              </div>
+              <p className="text-[10px] text-rose-50 font-medium">บันทึกรายจ่าย</p>
+            </div>
+          </Link>
+
+          <Link 
+            href="/expense"
+            className="bg-gradient-to-br from-sky-400 to-blue-400 text-white p-4 rounded-3xl border border-sky-300/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition duration-200 flex items-center gap-3 text-left group relative overflow-hidden block"
+          >
+            <div className="absolute -right-2 -bottom-2 text-4xl opacity-10 font-black">📸</div>
+            <div className="w-10 h-10 rounded-2xl bg-white/25 backdrop-blur-md flex items-center justify-center font-black shrink-0 group-hover:scale-110 transition">
+              <Camera className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-black tracking-tight">ถ่ายใบเสร็จ</p>
+                <span className="text-xs">📸</span>
+              </div>
+              <p className="text-[10px] text-sky-50 font-medium">สแกนอัปโหลด</p>
+            </div>
+          </Link>
+
+          <Link 
+            href="/reports" 
+            className="bg-gradient-to-br from-amber-400 to-orange-400 text-white p-4 rounded-3xl border border-amber-300/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition duration-200 flex items-center gap-3 text-left group relative overflow-hidden block"
+          >
+            <div className="absolute -right-2 -bottom-2 text-4xl opacity-10 font-black">📊</div>
+            <div className="w-10 h-10 rounded-2xl bg-white/25 backdrop-blur-md flex items-center justify-center font-black shrink-0 group-hover:scale-110 transition">
+              <FileOutput className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-black tracking-tight">สร้างรายงาน</p>
+                <span className="text-xs">📊</span>
+              </div>
+              <p className="text-[10px] text-amber-50 font-medium">ส่งออก PDF/Excel</p>
+            </div>
+          </Link>
+
+         <Link
+  href="/tax"
+  className="bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl shadow-sm flex flex-col justify-between text-white hover:opacity-95 transition"
+>
+  <div className="flex items-center justify-between">
+    <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+      <Calculator className="w-5 h-5 text-white" />
+    </div>
+    <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">ประมาณการ</span>
+  </div>
+  <div className="mt-4">
+    <h3 className="text-base font-black tracking-tight">คำนวณภาษี</h3>
+    <p className="text-[11px] text-purple-100 font-medium">จำลองภาษี 4 หมวด</p>
+  </div>
+</Link>
+        </div>
+      </div>
+
+      {/* 📊 CHART SECTION */}
+      <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div>
+              <h3 className="font-black text-xs text-slate-800">กราฟเปรียบเทียบรายรับและรายจ่าย</h3>
+              <p className="text-[10px] text-slate-400">อัปเดตสถิติตามข้อมูลจริงในระบบแบบเรียลไทม์</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-md bg-emerald-400 inline-block"></span>
+              <span className="text-slate-600 font-bold">รายรับ</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-md bg-rose-400 inline-block"></span>
+              <span className="text-slate-600 font-bold">รายจ่าย</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-6 pb-2 px-2">
+          {chartData.length === 0 || (chartData.length === 1 && chartData[0].income === 0 && chartData[0].expense === 0) ? (
+            <div className="h-48 flex flex-col items-center justify-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-3xl">
+              <BarChart3 className="w-8 h-8 text-slate-300 mb-2 stroke-[1.5]" />
+              ยังไม่มีข้อมูลเพียงพอแสดงกราฟ ลองบันทึกรายรับหรือรายจ่ายก่อนนะครับ
+            </div>
+          ) : (
+            <div className="h-56 flex items-end justify-around gap-4 border-b border-slate-100 pb-2">
+              {chartData.map((d, index) => {
+                const incomeHeight = Math.max((d.income / maxChartValue) * 160, 8);
+                const expenseHeight = Math.max((d.expense / maxChartValue) * 160, 8);
+                return (
+                  <div key={index} className="flex flex-col items-center flex-1 h-full justify-end group">
+                    <div className="flex items-end justify-center gap-1.5 w-full h-44 pb-2">
+                      <div 
+                        style={{ height: `${incomeHeight}px` }} 
+                        className="w-full max-w-[32px] bg-emerald-400 rounded-t-xl transition-all duration-500 relative group-hover:bg-emerald-500 shadow-sm"
+                      ></div>
+                      <div 
+                        style={{ height: `${expenseHeight}px` }} 
+                        className="w-full max-w-[32px] bg-rose-400 rounded-t-xl transition-all duration-500 relative group-hover:bg-rose-500 shadow-sm"
+                      ></div>
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-500 mt-2 truncate w-full text-center">{d.month}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Section: Recent Transactions & Tax Calendar */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        
+        {/* รายการเคลื่อนไหวล่าสุด */}
+        <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm space-y-3">
+          <div className="flex justify-between items-center">
+            <h4 className="font-black text-xs text-slate-800">รายการเคลื่อนไหวล่าสุดในระบบ</h4>
+            <Link href="/reports" className="text-[11px] text-amber-600 font-bold hover:underline">ดูทั้งหมด →</Link>
+          </div>
+
+          <div className="space-y-2.5">
+            {recentTransactions.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                ยังไม่มีข้อมูลการบันทึกรายการ ลองกดปุ่ม <strong>"เงินเข้า"</strong> หรือ <strong>"เงินออก"</strong> ด้านบนได้เลยครับ
+              </div>
+            ) : (
+              recentTransactions.map((item, i) => (
+                <div key={i} className="flex justify-between items-center p-3 rounded-2xl hover:bg-amber-50/30 transition border border-slate-100/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-2xl flex items-center justify-center font-bold text-xs ${item.type === 'income' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>
+                      {item.type === 'income' ? '📥' : '📤'}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-xs text-slate-700">
+                        {item.type === 'income' ? (item.category || item.channel || 'รายรับหน้าร้าน') : (item.category || 'รายจ่าย')}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{item.date || '-'} {item.note ? `• ${item.note}` : ''}</p>
+                    </div>
+                  </div>
+                  <span className={`font-black text-xs ${item.type === 'income' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {item.type === 'income' ? `+${(Number(item.grossSales || item.total) || 0).toLocaleString()} บาท` : `-${(Number(item.amount) || 0).toLocaleString()} บาท`}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ปฏิทินภาษี พร้อมสถานะแจ้งเตือนนับถอยหลัง */}
+        <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm space-y-3">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-1.5">
+              <h4 className="font-black text-xs text-slate-800">ปฏิทินภาษี & สถานะแจ้งเตือน</h4>
+              <span className="text-[9px] bg-rose-100 text-rose-600 font-bold px-1.5 py-0.5 rounded-full animate-pulse">● Active Alert</span>
+            </div>
+            <button onClick={() => setShowAlertModal(true)} className="text-[11px] text-amber-600 font-bold hover:underline">ดูรายละเอียด →</button>
+          </div>
+
+          <div className="space-y-2.5">
+            {/* ภ.ง.ด. 94 (บุคคลธรรมดา - ครึ่งปี) */}
+            <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-200/60 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-extrabold text-xs text-slate-800">ภ.ง.ด.94 (ภาษีครึ่งปีบุคคลธรรมดา)</p>
+                  <span className="text-[9px] font-bold text-amber-800 bg-amber-200/60 px-1.5 py-0.5 rounded-md">ร้านค้าทั่วไป</span>
+                </div>
+                <p className="text-[10px] text-amber-800/80 font-medium mt-0.5">กำหนดเขตยื่น: ก.ค. - 30 ก.ย.</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black text-white bg-rose-400 px-2.5 py-1 rounded-xl shadow-sm">
+                  เหลือ {diffDaysPnd94 > 0 ? diffDaysPnd94 : 0} วัน
+                </span>
+              </div>
+            </div>
+
+            {/* ภ.ง.ด. 90 (บุคคลธรรมดา - สิ้นปี) */}
+            <div className="p-3 rounded-2xl bg-sky-50/60 border border-sky-200/60 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-extrabold text-xs text-slate-800">ภ.ง.ด.90 (ภาษีประจำปีบุคคลธรรมดา)</p>
+                  <span className="text-[9px] font-bold text-sky-800 bg-sky-200/60 px-1.5 py-0.5 rounded-md">ร้านค้าทั่วไป</span>
+                </div>
+                <p className="text-[10px] text-sky-800/80 font-medium mt-0.5">กำหนดเขตยื่น: ม.ค. - 31 มี.ค.</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black text-sky-900 bg-sky-200/80 px-2.5 py-1 rounded-xl">
+                  อีก {diffDaysPnd90 > 0 ? diffDaysPnd90 : 365} วัน
+                </span>
+              </div>
+            </div>
+
+            {/* ภ.พ.30 (VAT) */}
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="font-extrabold text-xs text-slate-800">ภาษีมูลค่าเพิ่ม (ภ.พ.30)</p>
+                <p className="text-[10px] text-slate-400">เฉพาะร้านที่จด VAT (รายได้เกิน 1.8 ลบ.)</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2.5 py-1 rounded-xl">ยื่นทุกวันที่ 15-23</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 🔔 POPUP MODAL: แจ้งเตือนภาษีละเอียด */}
+      {showAlertModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-100 space-y-4 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-rose-100 text-rose-500 flex items-center justify-center font-bold">
+                  <Bell className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-800">ศูนย์แจ้งเตือนภาษีร้าน Aree</h3>
+                  <p className="text-[10px] text-slate-400">กำหนดเขตยื่นภาษีและคำเตือนกรมสรรพากร</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAlertModal(false)}
+                className="w-8 h-8 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/60 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                    🚨 ภ.ง.ด. 94 (ครึ่งปีภาษี)
+                  </span>
+                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                    เหลืออีก {diffDaysPnd94} วัน
+                  </span>
+                </div>
+                <p className="text-xs text-amber-900/80 leading-relaxed">
+                  สำหรับร้านค้าบุคคลธรรมดาที่มีรายได้ระหว่าง มกราคม - มิถุนายน ต้องยื่นแบบแสดงรายการและชำระภาษี (ถ้ามี) ภายในวันที่ <strong>30 กันยายนนี้</strong>
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-sky-50/80 border border-sky-200/60 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-black text-xs text-sky-950 flex items-center gap-1.5">
+                    📅 ภ.ง.ด. 90 (ประจำปีภาษี)
+                  </span>
+                  <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full">
+                    รอบปี 2569
+                  </span>
+                </div>
+                <p className="text-xs text-sky-900/80 leading-relaxed">
+                  สรุปรายรับรายจ่ายตลอดทั้งปีของร้านค้าเพื่อยื่นภาษีเงินได้บุคคลธรรมดาประจำปี กำหนดเขตยื่นภายใน <strong>31 มีนาคมปีหน้า</strong>
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  onClick={() => setShowAlertModal(false)}
+                  className="w-full py-3 bg-amber-400 hover:bg-amber-500 text-slate-900 font-black text-xs rounded-2xl shadow-sm transition"
+                >
+                  รับทราบและเข้าใจแล้วครับ 🐾
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mascot Assistant Banner */}
+      <div className="bg-amber-50/80 border border-amber-200/60 p-3.5 rounded-3xl flex items-center justify-between gap-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-amber-200 flex items-center justify-center text-xl shrink-0 shadow-sm">
+            🐕
+          </div>
+          <div>
+            <p className="text-xs font-black text-amber-950">น้อง NJ เตือนนะครับ 🐾</p>
+            <p className="text-[11px] text-amber-900/80 font-medium">
+              ปรับโทนสีพาสเทลละมุนตา พร้อมสูตรคำนวณภาษีตามเกณฑ์สรรพากรจริงให้เรียบร้อยแล้วครับพี่! 😊
+            </p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
