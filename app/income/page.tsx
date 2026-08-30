@@ -143,7 +143,6 @@ export default function IncomePage() {
                       : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-100'
                   } ${idx === 4 ? 'col-span-2 sm:col-span-1' : ''}`}
                 >
-                  <span>{item.emoji}</span>
                   <span className="truncate">{item.name}</span>
                 </button>
               ))}
