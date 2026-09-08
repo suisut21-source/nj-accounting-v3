@@ -45,11 +45,11 @@ export default function ReportsPage() {
 
   let totalGrossSales = 0; 
   let totalDeductions = 0; 
-  let totalCash = 0;      
+  let totalCash = 0;       
   let totalTransfer = 0;  
 
   filteredIncome.forEach(item => {
-    const gross = Number(item.grossSales || item.total || 0);
+    const gross = Number(item.grossSales || item.total || item.net || item.amount || 0);
     const gpDeduction = Number(item.gpDeduction || item.gpAmount || 0);
     const adDeduction = Number(item.adDeduction || item.adAmount || 0);
     const debtDeduction = Number(item.debtDeduction || item.debtAmount || 0);
@@ -59,13 +59,13 @@ export default function ReportsPage() {
     let transfer = Number(item.netTransfer || item.transfer || item.appTransfer || 0);
 
     if (cash === 0 && transfer === 0) {
-      if (item.channel && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
+      if (item.channel && item.channel !== 'หน้าร้าน / ทั่วไป' && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
         transfer = gross - deductionSum;
       } else {
         cash = gross;
       }
     } else {
-      if (item.channel && item.channel !== 'หน้าร้าน (เงินสด/โอน)' && transfer === 0) {
+      if (item.channel && item.channel !== 'หน้าร้าน / ทั่วไป' && item.channel !== 'หน้าร้าน (เงินสด/โอน)' && transfer === 0) {
         transfer = gross - deductionSum;
       }
     }
@@ -85,11 +85,9 @@ export default function ReportsPage() {
     try {
       setIsExporting(true);
 
-      // โหลด library jszip แบบ dynamic import
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
 
-      // 1. สร้างเนื้อหา CSV สำหรับ Excel (รองรับภาษาไทยด้วย BOM)
       let csvContent = "\uFEFF=== รายงานสรุปบัญชีร้านข้าวพันผัก ===\n";
       csvContent += `เดือนที่เลือก: ${selectedMonth}\n\n`;
       
@@ -97,7 +95,7 @@ export default function ReportsPage() {
       csvContent += "วันที่,ช่องทาง,ยอดขายรวม (Gross),หัก GP/ค่าบริการ/หนี้,เงินสดในเก๊ะ,เงินโอนเข้าบัญชี (Net),หมายเหตุ\n";
       
       filteredIncome.forEach(item => {
-        const gross = Number(item.grossSales || item.total || 0);
+        const gross = Number(item.grossSales || item.total || item.net || item.amount || 0);
         const gp = Number(item.gpDeduction || item.gpAmount || 0);
         const ad = Number(item.adDeduction || item.adAmount || 0);
         const debt = Number(item.debtDeduction || item.debtAmount || 0);
@@ -106,12 +104,12 @@ export default function ReportsPage() {
         let netTransfer = Number(item.netTransfer || item.transfer || item.appTransfer || 0);
 
         if (cash === 0 && netTransfer === 0) {
-          if (item.channel && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
+          if (item.channel && item.channel !== 'หน้าร้าน / ทั่วไป' && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
             netTransfer = gross - totalDeduct;
           } else {
             cash = gross;
           }
-        } else if (netTransfer === 0 && item.channel && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
+        } else if (netTransfer === 0 && item.channel && item.channel !== 'หน้าร้าน / ทั่วไป' && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
           netTransfer = gross - totalDeduct;
         }
 
@@ -131,7 +129,6 @@ export default function ReportsPage() {
         const noteText = (item.note || '-').replace(/"/g, '""');
         csvContent += `"${item.date || '-'}","${item.category || '-'}","${sellerName}","${item.paymentMethod || 'เงินสด'}",${Number(item.amount) || 0},"${noteText}"\n`;
 
-        // ถ้ามีรูปใบเสร็จ ให้ดึงมาใส่ในโฟลเดอร์ ZIP ด้วย
         if (item.receiptUrl && receiptsFolder) {
           try {
             const response = await fetch(item.receiptUrl);
@@ -144,10 +141,8 @@ export default function ReportsPage() {
         }
       }
 
-      // 2. ใส่ไฟล์ CSV ลงใน ZIP
       zip.file("accounting_report.csv", csvContent);
 
-      // 3. สร้างไฟล์ ZIP และสั่งดาวน์โหลดอัตโนมัติ
       const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
       const link = document.createElement("a");
@@ -335,7 +330,7 @@ export default function ReportsPage() {
                 </tr>
               ) : (
                 filteredIncome.map((item, index) => {
-                  const gross = Number(item.grossSales || item.total || 0);
+                  const gross = Number(item.grossSales || item.total || item.net || item.amount || 0);
                   const gp = Number(item.gpDeduction || item.gpAmount || 0);
                   const ad = Number(item.adDeduction || item.adAmount || 0);
                   const debt = Number(item.debtDeduction || item.debtAmount || 0);
@@ -345,12 +340,12 @@ export default function ReportsPage() {
                   let netTransfer = Number(item.netTransfer || item.transfer || item.appTransfer || 0);
 
                   if (cash === 0 && netTransfer === 0) {
-                    if (item.channel && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
+                    if (item.channel && item.channel !== 'หน้าร้าน / ทั่วไป' && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
                       netTransfer = gross - totalDeduct;
                     } else {
                       cash = gross;
                     }
-                  } else if (netTransfer === 0 && item.channel && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
+                  } else if (netTransfer === 0 && item.channel && item.channel !== 'หน้าร้าน / ทั่วไป' && item.channel !== 'หน้าร้าน (เงินสด/โอน)') {
                     netTransfer = gross - totalDeduct;
                   }
 

@@ -13,6 +13,11 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false); // สถานะเปิด-ปิดเมนูบนมือถือ
 
+  // 🔒 ถ้าตอนนี้อยู่หน้า /auth ให้ซ่อน Sidebar ทันที ไม่ให้กดข้ามไปไหนได้
+  if (pathname === '/auth') {
+    return null;
+  }
+
   const menuSections = [
     {
       title: 'เมนูหลัก',
@@ -83,7 +88,7 @@ export default function Sidebar() {
       >
         <div className="space-y-6">
           
-          {/* โลโก้และชื่อร้าน (ซ่อนในมือถือเพราะมีแถบบนแล้ว หรือจะให้โชว์ด้วยก็ได้ครับ) */}
+          {/* โลโก้และชื่อร้าน */}
           <div className="hidden md:flex items-center gap-3 p-3 bg-white/90 backdrop-blur-sm rounded-2xl border-2 shadow-sm" style={{ borderColor: '#CC5500' }}>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl shrink-0 shadow-inner text-white" style={{ backgroundColor: '#CC5500' }}>
               🐕
@@ -110,7 +115,7 @@ export default function Sidebar() {
                       <Link
                         key={item.name}
                         href={item.href}
-                        onClick={() => setIsOpen(false)} // พอกดเลือกเมนบบนมือถือ ให้ปิด Sidebar อัตโนมัติ
+                        onClick={() => setIsOpen(false)}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all border-2 shadow-2xs ${
                           isActive
                             ? 'text-white shadow-md scale-[1.02]'

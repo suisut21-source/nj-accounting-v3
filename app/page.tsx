@@ -14,10 +14,19 @@ export default function Home() {
   const [showAlertModal, setShowAlertModal] = useState<boolean>(false);
 
   useEffect(() => {
-    const savedIncome = JSON.parse(localStorage.getItem('incomeTransactions') || '[]');
-    const savedExpense = JSON.parse(localStorage.getItem('expenseTransactions') || '[]');
-    setIncomeData(savedIncome);
-    setExpenseData(savedExpense);
+    const savedIncome = 
+      JSON.parse(localStorage.getItem('incomeTransactions') || 'null') ||
+      JSON.parse(localStorage.getItem('incomes') || 'null') ||
+      JSON.parse(localStorage.getItem('income') || '[]');
+
+    const savedExpense = 
+      JSON.parse(localStorage.getItem('expenseTransactions') || 'null') ||
+      JSON.parse(localStorage.getItem('expenses') || 'null') ||
+      JSON.parse(localStorage.getItem('expense') || 'null') ||
+      JSON.parse(localStorage.getItem('moneyOut') || '[]');
+
+    setIncomeData(Array.isArray(savedIncome) ? savedIncome : []);
+    setExpenseData(Array.isArray(savedExpense) ? savedExpense : []);
   }, []);
 
   const allDates = [...incomeData.map(i => i.date), ...expenseData.map(e => e.date)].filter(Boolean);
@@ -31,22 +40,37 @@ export default function Home() {
     )
   ).sort().reverse() as string[];
 
-  const filteredIncome = incomeData.filter(item => {
-    if (selectedMonth === 'all') return true;
-    if (!item || !item.date) return false;
-    return String(item.date).startsWith(selectedMonth);
-  });
+  const filteredIncome = selectedMonth === 'all' 
+    ? incomeData 
+    : incomeData.filter(item => String(item.date || '').startsWith(selectedMonth));
 
-  const filteredExpense = expenseData.filter(item => {
-    if (selectedMonth === 'all') return true;
-    if (!item || !item.date) return false;
-    return String(item.date).startsWith(selectedMonth);
-  });
+  const filteredExpense = selectedMonth === 'all' 
+    ? expenseData 
+    : expenseData.filter(item => String(item.date || '').startsWith(selectedMonth));
 
-  const totalSales = filteredIncome.reduce((sum, item) => sum + (Number(item?.grossSales || item?.total || 0)), 0);
-  const totalExpenses = filteredExpense.reduce((sum, item) => sum + (Number(item?.amount || 0)), 0);
+  // 1. ยอดขายรวม (totalSales)
+  const totalSales = filteredIncome.reduce((sum, item) => {
+    const gross = Number(item?.grossSales || item?.total || item?.amount || item?.price || 0);
+    return sum + gross;
+  }, 0);
+  
+  // 2. รายจ่ายจริงจากตารางเงินออก
+  const expenseFromOut = filteredExpense.reduce((sum, item) => {
+    const val = Number(item?.amount || item?.total || item?.netTotal || item?.price || item?.cost || 0);
+    return sum + val;
+  }, 0);
+  
+  // 3. หัก GP / ค่าบริการ / หนี้ (สูตรเดียวกับหน้า Report เป๊ะๆ)
+  const totalDeductions = filteredIncome.reduce((sum, item) => {
+    const gp = Number(item.gpDeduction || item.gpAmount || 0);
+    const ad = Number(item.adDeduction || item.adAmount || 0);
+    const debt = Number(item.debtDeduction || item.debtAmount || 0);
+    return sum + (gp + ad + debt);
+  }, 0);
+
+  const totalOtherExpenses = expenseFromOut;
+  const totalExpenses = totalOtherExpenses + totalDeductions;
   const netProfit = totalSales - totalExpenses;
-
   const calculatePersonalIncomeTax = (income: number) => {
     const expenseDeduction = income * 0.60;
     const incomeAfterExpense = income - expenseDeduction;
@@ -88,22 +112,31 @@ export default function Home() {
 
   const chartMonths = availableMonths.length > 0 ? availableMonths.slice(0, 6).reverse() : ['ยอดปัจจุบัน'];
   const chartData = chartMonths.map(month => {
-    const mIncome = incomeData.filter(i => i.date && String(i.date).startsWith(month === 'ยอดปัจจุบัน' ? '' : month))
-      .reduce((sum, i) => sum + (Number(i.grossSales || i.total || 0)), 0);
-    const mExpense = expenseData.filter(e => e.date && String(e.date).startsWith(month === 'ยอดปัจจุบัน' ? '' : month))
-      .reduce((sum, e) => sum + (Number(e.amount || 0)), 0);
+    const mIncomeList = incomeData.filter(i => i.date && String(i.date).startsWith(month === 'ยอดปัจจุบัน' ? '' : month));
+    const mExpenseList = expenseData.filter(e => e.date && String(e.date).startsWith(month === 'ยอดปัจจุบัน' ? '' : month));
+    
+    const mIncome = mIncomeList.reduce((sum, i) => sum + (Number(i.grossSales || i.total || i.amount || 0)), 0);
+    const mExpenseOut = mExpenseList.reduce((sum, e) => sum + (Number(e.amount || e.total || e.price || 0)), 0);
+    const mGpIn = mIncomeList.reduce((sum, i) => {
+      const g = Number(i.gp || i.gpFee || 0);
+      const a = Number(i.ads || 0);
+      const d = Number(i.debt || 0);
+      const o = Number(i.deduction || 0);
+      return sum + Number(i.totalDeduction || (g + a + d + o));
+    }, 0);
+    
     return {
       month: month === 'ยอดปัจจุบัน' ? 'ภาพรวม' : month,
       income: mIncome,
-      expense: mExpense
+      expense: mExpenseOut + mGpIn
     };
   });
 
   const maxChartValue = Math.max(...chartData.map(d => Math.max(d.income, d.expense)), 1000);
 
   const recentTransactions = [
-    ...filteredIncome.map(item => ({ ...item, type: 'income' })),
-    ...filteredExpense.map(item => ({ ...item, type: 'expense' }))
+    ...incomeData.map(item => ({ ...item, type: 'income', displayAmount: Number(item.grossSales || item.total || item.amount || 0) })),
+    ...expenseData.map(item => ({ ...item, type: 'expense', displayAmount: Number(item.amount || item.total || item.netTotal || item.price || 0) }))
   ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()).slice(0, 5);
 
   const targetPnd94 = new Date('2026-09-30');
@@ -135,7 +168,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Top Right Controls & Month Selector */}
         <div className="flex items-center gap-2.5 self-end sm:self-auto">
           <button 
             onClick={() => setShowAlertModal(true)}
@@ -165,12 +197,12 @@ export default function Home() {
       {/* 🚨 TAX URGENT ALERT BANNER */}
       <div className="bg-gradient-to-r from-amber-100 via-orange-100 to-rose-100 p-4 rounded-3xl text-slate-800 shadow-sm border border-amber-200/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-white/80 backdrop-blur-md flex items-center justify-center text-xl shrink-0 shadow-sm">
+          <div className="w-10 h-10 rounded-2xl bg-white/85 backdrop-blur-md flex items-center justify-center text-xl shrink-0 shadow-sm">
             ⏳
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-black text-xs sm:text-sm tracking-tight text-amber-950">แจ้งเตือนกำหนดกำหนดยื่นภาษีบุคคลธรรมดา</h3>
+              <h3 className="font-black text-xs sm:text-sm tracking-tight text-amber-950">แจ้งเตือนกำหนดยื่นภาษีบุคคลธรรมดา</h3>
               <span className="bg-amber-200/80 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full">สำคัญมาก</span>
             </div>
             <p className="text-xs text-amber-900/80 font-medium mt-0.5">
@@ -193,7 +225,7 @@ export default function Home() {
           <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-400"></div>
           <div className="flex justify-between items-start pt-1">
             <div>
-              <span className="text-xs font-bold text-slate-400">รายรับเดือนนี้</span>
+              <span className="text-xs font-bold text-slate-400">รายรับรวมทั้งหมด</span>
               <div className="flex items-baseline gap-1 mt-1">
                 <span className="text-2xl font-black text-slate-700 tracking-tight">{totalSales.toLocaleString()}</span>
                 <span className="text-xs font-bold text-slate-400">บาท</span>
@@ -209,24 +241,25 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ค่าใช้จ่าย */}
+        {/* ค่าใช้จ่าย (ตรงกับหน้า Report เป๊ะ) */}
         <div className="bg-white rounded-3xl border border-rose-100 p-4 shadow-sm hover:shadow-md transition relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-rose-400"></div>
           <div className="flex justify-between items-start pt-1">
             <div>
-              <span className="text-xs font-bold text-slate-400">ค่าใช้จ่ายเดือนนี้</span>
+              <span className="text-xs font-bold text-slate-400">ค่าใช้จ่ายรวม (Expenses + GP)</span>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-black text-slate-700 tracking-tight">{totalExpenses.toLocaleString()}</span>
-                <span className="text-xs font-bold text-slate-400">บาท</span>
+                <span className="text-2xl font-black text-rose-600 tracking-tight">฿{totalExpenses.toLocaleString()}</span>
               </div>
             </div>
             <div className="w-8 h-8 rounded-2xl bg-rose-50 text-rose-400 flex items-center justify-center">
               <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400">จาก {filteredExpense.length} รายการ</span>
-            <span className="font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">ข้อมูลจริง</span>
+          <div className="mt-3 pt-2 border-t border-slate-50 flex flex-col gap-0.5 text-[10px]">
+            <span className="text-slate-400">• ค่าวัดถุดิบ/รายจ่ายร้าน: ฿{totalOtherExpenses.toLocaleString()}</span>
+            {totalDeductions > 0 && (
+              <span className="text-amber-600 font-bold">• ค่าหัก GP/โฆษณา/ผ่อนหนี้: ฿{totalDeductions.toLocaleString()}</span>
+            )}
           </div>
         </div>
 
@@ -235,10 +268,11 @@ export default function Home() {
           <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-400"></div>
           <div className="flex justify-between items-start pt-1">
             <div>
-              <span className="text-xs font-bold text-slate-400">กำไรสุทธิ</span>
+              <span className="text-xs font-bold text-slate-400">กำไรสุทธิ (Net Profit)</span>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-black text-slate-700 tracking-tight">{netProfit.toLocaleString()}</span>
-                <span className="text-xs font-bold text-slate-400">บาท</span>
+                <span className="text-2xl font-black text-indigo-600 tracking-tight">
+                   ฿{netProfit.toLocaleString()}
+                </span>
               </div>
             </div>
             <div className="w-8 h-8 rounded-2xl bg-indigo-50 text-indigo-400 flex items-center justify-center">
@@ -246,7 +280,7 @@ export default function Home() {
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400">รายรับ - รายจ่าย</span>
+            <span className="text-slate-400">ยอดขายรวม หักด้วย รายจ่ายรวมทั้งหมด</span>
             <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">คำนวณอัตโนมัติ</span>
           </div>
         </div>
@@ -273,7 +307,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 🚀 QUICK ACTIONS SECTION */}
+      {/* QUICK ACTIONS SECTION */}
       <div>
         <div className="flex items-center gap-2 mb-2.5 px-1">
           <span className="text-sm">✨</span>
@@ -340,34 +374,35 @@ export default function Home() {
             <div className="w-10 h-10 rounded-2xl bg-white/25 backdrop-blur-md flex items-center justify-center font-black shrink-0 group-hover:scale-110 transition">
               <FileOutput className="w-5 h-5 stroke-[2.5]" />
             </div>
-            <div>
+            <div className="flex flex-col justify-center min-w-0">
               <div className="flex items-center gap-1">
-                <p className="text-sm font-black tracking-tight">สร้างรายงาน</p>
-                <span className="text-xs">📊</span>
+                <p className="text-xs font-black tracking-tight leading-tight">สร้างรายงาน</p>
+                <span className="text-[10px]">📊</span>
               </div>
-              <p className="text-[10px] text-amber-50 font-medium">ส่งออก PDF/Excel</p>
+              <p className="text-[9px] text-amber-50 font-medium truncate mt-0.5">PDF/Excel</p>
             </div>
           </Link>
 
-         <Link
-  href="/tax"
-  className="bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl shadow-sm flex flex-col justify-between text-white hover:opacity-95 transition"
->
-  <div className="flex items-center justify-between">
-    <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
-      <Calculator className="w-5 h-5 text-white" />
-    </div>
-    <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">ประมาณการ</span>
-  </div>
-  <div className="mt-4">
-    <h3 className="text-base font-black tracking-tight">คำนวณภาษี</h3>
-    <p className="text-[11px] text-purple-100 font-medium">จำลองภาษี 4 หมวด</p>
-  </div>
-</Link>
+          <Link
+            href="/tax"
+            className="bg-gradient-to-br from-violet-500 to-purple-600 p-4 rounded-3xl shadow-sm flex flex-col justify-between text-white hover:opacity-95 transition relative overflow-hidden"
+          >
+            <div className="absolute -right-2 -bottom-2 text-4xl opacity-10 font-black">🧮</div>
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                <Calculator className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-[9px] font-bold bg-white/20 px-2 py-0.5 rounded-full">ประมาณการ</span>
+            </div>
+            <div className="mt-2">
+              <h3 className="text-xs font-black tracking-tight">คำนวณภาษี</h3>
+              <p className="text-[9px] text-purple-100 font-medium">จำลองภาษี 4 หมวด</p>
+            </div>
+          </Link>
         </div>
       </div>
 
-      {/* 📊 CHART SECTION */}
+      {/* CHART SECTION */}
       <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm space-y-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -423,10 +458,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Bottom Section: Recent Transactions & Tax Calendar */}
+      {/* Bottom Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        
-        {/* รายการเคลื่อนไหวล่าสุด */}
         <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm space-y-3">
           <div className="flex justify-between items-center">
             <h4 className="font-black text-xs text-slate-800">รายการเคลื่อนไหวล่าสุดในระบบ</h4>
@@ -447,13 +480,13 @@ export default function Home() {
                     </div>
                     <div>
                       <p className="font-extrabold text-xs text-slate-700">
-                        {item.type === 'income' ? (item.category || item.channel || 'รายรับหน้าร้าน') : (item.category || 'รายจ่าย')}
+                        {item.type === 'income' ? (item.category || item.channel || 'รายรับหน้าร้าน') : (item.category || item.name || 'รายจ่าย')}
                       </p>
                       <p className="text-[10px] text-slate-400">{item.date || '-'} {item.note ? `• ${item.note}` : ''}</p>
                     </div>
                   </div>
                   <span className={`font-black text-xs ${item.type === 'income' ? 'text-emerald-600' : 'text-rose-500'}`}>
-                    {item.type === 'income' ? `+${(Number(item.grossSales || item.total) || 0).toLocaleString()} บาท` : `-${(Number(item.amount) || 0).toLocaleString()} บาท`}
+                    {item.type === 'income' ? `+${item.displayAmount.toLocaleString()} บาท` : `-${item.displayAmount.toLocaleString()} บาท`}
                   </span>
                 </div>
               ))
@@ -461,7 +494,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ปฏิทินภาษี พร้อมสถานะแจ้งเตือนนับถอยหลัง */}
         <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm space-y-3">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-1.5">
@@ -472,7 +504,6 @@ export default function Home() {
           </div>
 
           <div className="space-y-2.5">
-            {/* ภ.ง.ด. 94 (บุคคลธรรมดา - ครึ่งปี) */}
             <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-200/60 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-1.5">
@@ -488,7 +519,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ภ.ง.ด. 90 (บุคคลธรรมดา - สิ้นปี) */}
             <div className="p-3 rounded-2xl bg-sky-50/60 border border-sky-200/60 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-1.5">
@@ -504,7 +534,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ภ.พ.30 (VAT) */}
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
               <div>
                 <p className="font-extrabold text-xs text-slate-800">ภาษีมูลค่าเพิ่ม (ภ.พ.30)</p>
@@ -516,10 +545,9 @@ export default function Home() {
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* 🔔 POPUP MODAL: แจ้งเตือนภาษีละเอียด */}
+      {/* POPUP MODAL */}
       {showAlertModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-100 space-y-4 animate-in fade-in zoom-in duration-200">
@@ -529,7 +557,7 @@ export default function Home() {
                   <Bell className="w-5 h-5 animate-bounce" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-800">ศูนย์แจ้งเตือนภาษีร้าน Aree</h3>
+                  <h3 className="font-black text-sm text-slate-800">ศูนย์แจ้งเตือนภาษีร้าน ข้าวพันผัก</h3>
                   <p className="text-[10px] text-slate-400">กำหนดเขตยื่นภาษีและคำเตือนกรมสรรพากร</p>
                 </div>
               </div>
@@ -590,10 +618,8 @@ export default function Home() {
             🐕
           </div>
           <div>
-            <p className="text-xs font-black text-amber-950">น้อง NJ เตือนนะครับ 🐾</p>
-            <p className="text-[11px] text-amber-900/80 font-medium">
-              ปรับโทนสีพาสเทลละมุนตา พร้อมสูตรคำนวณภาษีตามเกณฑ์สรรพากรจริงให้เรียบร้อยแล้วครับพี่! 😊
-            </p>
+            
+    
           </div>
         </div>
       </div>

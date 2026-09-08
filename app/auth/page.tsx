@@ -2,19 +2,71 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '../lib/supabase';
 
 export default function AuthPage() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(false); // สลับระหว่าง เข้าสู่ระบบ / ลงทะเบียน
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [userType, setUserType] = useState('business'); // 'business' หรือ 'personal'
+  const [shopName, setShopName] = useState(''); // เก็บชื่อร้านค้า
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // จำลองการล็อกอินหรือสมัครสมาชิกสำเร็จ แล้วพาไปหน้าหลัก Dashboard
-    console.log({ email, password, userType });
-    router.push('/'); 
+    setLoading(true);
+
+    const trialStartDate = new Date();
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialStartDate.getDate() + 30); // ทดลองใช้ฟรี 30 วัน
+
+    if (!isLogin) {
+      // โหมดสมัครสมาชิก: บันทึกข้อมูลร้านลง Supabase
+      supabase
+        .from('shops')
+        .insert([
+          {
+            shop_name: shopName || 'ร้านค้าใหม่',
+            email: email,
+            plan: 'TRIAL',
+            trial_start_date: trialStartDate.toISOString(),
+            trial_end_date: trialEndDate.toISOString(),
+          }
+        ])
+        .then(({ error }) => {
+          if (error) {
+            console.error('Error saving shop to Supabase:', error.message);
+            alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
+            setLoading(false);
+          } else {
+            // บันทึกสถานะลง localStorage ฝั่ง Client
+            const authData = {
+              email: email,
+              shopName: shopName || 'ร้านค้าใหม่',
+              plan: 'TRIAL',
+              trialStartDate: trialStartDate.toISOString(),
+              trialEndDate: trialEndDate.toISOString(),
+              isLoggedIn: true
+            };
+            localStorage.setItem('nj_auth_user', JSON.stringify(authData));
+            setLoading(false);
+            router.push('/');
+          }
+        });
+    } else {
+      // โหมดเข้าสู่ระบบ
+      const authData = {
+        email: email,
+        shopName: shopName || 'ร้านค้าของพี่',
+        plan: 'TRIAL',
+        trialStartDate: trialStartDate.toISOString(),
+        trialEndDate: trialEndDate.toISOString(),
+        isLoggedIn: true
+      };
+      localStorage.setItem('nj_auth_user', JSON.stringify(authData));
+      setLoading(false);
+      router.push('/');
+    }
   };
 
   return (
@@ -35,6 +87,21 @@ export default function AuthPage() {
         {/* ฟอร์ม */}
         <form onSubmit={handleSubmit} className="space-y-4">
           
+          {/* ถ้าเป็นการสมัครสมาชิก ให้กรอกชื่อร้านค้า */}
+          {!isLogin && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อร้านค้า</label>
+              <input 
+                type="text" 
+                required
+                value={shopName}
+                onChange={(e) => setShopName(e.target.value)}
+                placeholder="เช่น ร้านข้าวพันผัก" 
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">อีเมล หรือ เบอร์โทรศัพท์</label>
             <input 
@@ -43,7 +110,7 @@ export default function AuthPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="example@email.com" 
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800"
             />
           </div>
 
@@ -55,52 +122,17 @@ export default function AuthPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••" 
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800"
             />
           </div>
-
-          {/* ถ้าเป็นการสมัครสมาชิก ให้เลือกประเภทผู้ใช้งาน */}
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">เลือกประเภทการใช้งานของคุณ</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setUserType('business')}
-                  className={`p-3 text-left rounded-xl border transition-all ${
-                    userType === 'business' 
-                      ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-medium' 
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="text-lg mb-1">🏪</div>
-                  <div className="text-sm font-semibold">เจ้าของกิจการ</div>
-                  <div className="text-xs text-slate-500 mt-0.5">ร้านค้า / ขายของออนไลน์</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setUserType('personal')}
-                  className={`p-3 text-left rounded-xl border transition-all ${
-                    userType === 'personal' 
-                      ? 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-medium' 
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="text-lg mb-1">👔</div>
-                  <div className="text-sm font-semibold">บุคคลธรรมดา</div>
-                  <div className="text-xs text-slate-500 mt-0.5">เงินเดือน / ฟรีแลนซ์</div>
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* ปุ่มกดส่งฟอร์ม */}
           <button 
             type="submit"
-            className="w-full py-3 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/20 mt-2"
+            disabled={loading}
+            className="w-full py-3 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/20 mt-2 disabled:opacity-50"
           >
-            {isLogin ? 'เข้าสู่ระบบ' : 'ลงทะเบียนใช้งาน'}
+            {loading ? 'กำลังบันทึกข้อมูล...' : (isLogin ? 'เข้าสู่ระบบ' : '🚀 เริ่มต้นทดลองใช้ฟรี 1 เดือน')}
           </button>
 
         </form>
@@ -112,7 +144,7 @@ export default function AuthPage() {
             onClick={() => setIsLogin(!isLogin)}
             className="text-sm text-emerald-600 hover:underline font-medium"
           >
-            {isLogin ? 'ยังไม่มีบัญชี? สมัครสมาชิกที่นี่' : 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ'}
+            {isLogin ? 'ยังไม่มีบัญชีร้านค้า? ลงทะเบียนทดลองใช้ฟรี 1 เดือน' : 'มีบัญชีอยู่แล้ว? เข้าสู่ระบบ'}
           </button>
         </div>
 
